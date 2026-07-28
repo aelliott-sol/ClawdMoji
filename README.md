@@ -19,9 +19,9 @@ logo. No image editor involved.
 | **Definitely Not Clawd** 🥸 | **Clawd from Down Under** 🇦🇺 | **Cork Hat Clawd** 🪰 | **Clawd on the Barbie** 🌭 |
 | ![notclawd](emoji/notclawd/clawd_notclawd.gif) | ![downunder](emoji/downunder/clawd_downunder.gif) | ![corkhat](emoji/corkhat/clawd_corkhat.gif) | ![barbie](emoji/barbie/clawd_barbie.gif) |
 | <sub>by Clawd himself 🦀</sub> | <sub>by [@victor-bajanov](https://github.com/victor-bajanov)</sub> | <sub>by [@victor-bajanov](https://github.com/victor-bajanov)</sub> | <sub>by [@victor-bajanov](https://github.com/victor-bajanov)</sub> |
-| **Moonlit Clawd** 🌛 |  |  |  |
-| ![moonlight](emoji/moonlight/clawd_moonlight.gif) |  |  |  |
-| <sub>by [@Nitjsefnie](https://github.com/Nitjsefnie)</sub> |  |  |  |
+| **Moonlit Clawd** 🌛 | **Clawd Love** ❤️ |  |  |
+| ![moonlight](emoji/moonlight/clawd_moonlight.gif) | ![love](emoji/love/clawd_love.gif) |  |  |
+| <sub>by [@Nitjsefnie](https://github.com/Nitjsefnie)</sub> | <sub>by [@Nitjsefnie](https://github.com/Nitjsefnie)</sub> |  |  |
 <!-- gallery:end -->
 
 Browse the **[live gallery](https://afspies.github.io/ClawdMoji/)** (GIFs
