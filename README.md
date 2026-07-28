@@ -19,6 +19,9 @@ logo. No image editor involved.
 | **Definitely Not Clawd** 🥸 | **Clawd from Down Under** 🇦🇺 | **Cork Hat Clawd** 🪰 | **Clawd on the Barbie** 🌭 |
 | ![notclawd](emoji/notclawd/clawd_notclawd.gif) | ![downunder](emoji/downunder/clawd_downunder.gif) | ![corkhat](emoji/corkhat/clawd_corkhat.gif) | ![barbie](emoji/barbie/clawd_barbie.gif) |
 | <sub>by Clawd himself 🦀</sub> | <sub>by [@victor-bajanov](https://github.com/victor-bajanov)</sub> | <sub>by [@victor-bajanov](https://github.com/victor-bajanov)</sub> | <sub>by [@victor-bajanov](https://github.com/victor-bajanov)</sub> |
+| **Moonlit Clawd** 🌛 |  |  |  |
+| ![moonlight](emoji/moonlight/clawd_moonlight.gif) |  |  |  |
+| <sub>by [@Nitjsefnie](https://github.com/Nitjsefnie)</sub> |  |  |  |
 <!-- gallery:end -->
 
 Browse the **[live gallery](https://afspies.github.io/ClawdMoji/)** (GIFs
@@ -274,6 +277,7 @@ lands):
 <!-- contributors:begin -->
 <a href="https://afspies.github.io/ClawdMoji/"><img src="emoji/base/clawd_emoji.png" width="64" height="64" alt="Clawd himself" title="Clawd himself"></a>
 <a href="https://github.com/victor-bajanov"><img src="https://github.com/victor-bajanov.png?size=128" width="64" height="64" alt="@victor-bajanov" title="@victor-bajanov"></a>
+<a href="https://github.com/Nitjsefnie"><img src="https://github.com/Nitjsefnie.png?size=128" width="64" height="64" alt="@Nitjsefnie" title="@Nitjsefnie"></a>
 <!-- contributors:end -->
 
 ## License

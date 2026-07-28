@@ -53,6 +53,29 @@ def pen_disk(r):
             if dy * dy + dx * dx <= lim]
 
 
+def shut_eye(A, ty, tx, scale, color):
+    """Draw a sleeping eyelid over one eye cell, at (ty, tx) with cell `scale`.
+
+    The '‿' arc sits lowest in the middle and lifts at both ends, and occupies
+    exactly the cell the open 'O' eye used -- so a sleeping Clawd is a costume
+    change, not a reshape of the creature.
+
+    Both the dip and the stroke are scale/3, deliberately fat: emoji are read at
+    32 px, where a 2 px lid on a SCALE=10 sprite renders as half a pixel and
+    disappears. Bold shapes over fine detail.
+    """
+    dip = max(2, scale // 3)
+    thick = max(2, scale // 3)
+    mid = ty + scale // 2 - dip // 2
+    H, W = A.shape
+    for i in range(scale):
+        t = 2 * i / (scale - 1) - 1                  # -1 .. +1 across the cell
+        y = int(round(mid + dip * (1 - t * t)))      # ends ride higher
+        for k in range(thick):
+            if 0 <= y + k < H and 0 <= tx + i < W:
+                A[y + k, tx + i] = color
+
+
 def border_mask(body, pen):
     """Boolean outline ring around a body mask: dilate `body` by every (dy, dx)
     offset in `pen`, then subtract the body itself. This is exactly the
