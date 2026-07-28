@@ -167,13 +167,15 @@ def draw_sky(g):
     g[:SKY_SPLIT, :] = SKY_D
     for k, y in enumerate(range(SKY_SPLIT, SKY_SPLIT + 4)):   # dither the seam
         g[y, (k % 2)::2] = SKY_D if k < 2 else SKY
-    for r in range(MOON_R + 16, MOON_R, -4):                  # glow pooling
-        fill_disk(g, MOON_CY, MOON_CX, r, GLOW if r <= MOON_R + 8 else SKY_D)
 
 
 def draw_moon(g):
     fill_disk(g, MOON_CY, MOON_CX, MOON_R, MOON)
-    fill_disk(g, MOON_CY - 5, MOON_CX + 8, MOON_R - 1, GLOW)  # the bite
+    # the bite: the moon (rows 10..46, cols 12..48) sits entirely above
+    # SKY_SPLIT=46, i.e. in the SKY_D ("high and dark") band -- so the bite
+    # must repaint with SKY_D, the colour actually behind the moon there,
+    # not GLOW (which no longer exists as a background halo).
+    fill_disk(g, MOON_CY - 5, MOON_CX + 8, MOON_R - 1, SKY_D)  # the bite
 
 
 def draw_stars(g, f):
