@@ -22,6 +22,9 @@ logo. No image editor involved.
 | **Moonlit Clawd** 🌛 | **Clawd Love** ❤️ | **Mad Clawd** 😠 | **Clawd 9000** 🔴 |
 | ![moonlight](emoji/moonlight/clawd_moonlight.gif) | ![love](emoji/love/clawd_love.gif) | ![mad](emoji/mad/clawd_mad.gif) | ![clawd9000](emoji/clawd9000/clawd_9000.gif) |
 | <sub>by [@Nitjsefnie](https://github.com/Nitjsefnie)</sub> | <sub>by [@Nitjsefnie](https://github.com/Nitjsefnie)</sub> | <sub>by [@Nitjsefnie](https://github.com/Nitjsefnie)</sub> | <sub>by Clawd himself 🦀</sub> |
+| **Clawn** 🤡 |  |  |  |
+| ![clown](emoji/clown/clawd_clown.gif) |  |  |  |
+| <sub>by [@aelliott-sol](https://github.com/aelliott-sol)</sub> |  |  |  |
 <!-- gallery:end -->
 
 Browse the **[live gallery](https://afspies.github.io/ClawdMoji/)** (GIFs
@@ -278,6 +281,7 @@ lands):
 <a href="https://afspies.github.io/ClawdMoji/"><img src="emoji/base/clawd_emoji.png" width="64" height="64" alt="Clawd himself" title="Clawd himself"></a>
 <a href="https://github.com/victor-bajanov"><img src="https://github.com/victor-bajanov.png?size=128" width="64" height="64" alt="@victor-bajanov" title="@victor-bajanov"></a>
 <a href="https://github.com/Nitjsefnie"><img src="https://github.com/Nitjsefnie.png?size=128" width="64" height="64" alt="@Nitjsefnie" title="@Nitjsefnie"></a>
+<a href="https://github.com/aelliott-sol"><img src="https://github.com/aelliott-sol.png?size=128" width="64" height="64" alt="@aelliott-sol" title="@aelliott-sol"></a>
 <!-- contributors:end -->
 
 ## License
