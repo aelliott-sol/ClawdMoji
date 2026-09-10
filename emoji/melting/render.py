@@ -183,8 +183,9 @@ def dome(g, span):
     for xx in range(int(np.floor(lo)), int(np.ceil(hi)) + 1):
         if not 0 <= xx < N:
             continue
-        for yy in range(int(round(pile_top(xx, span))), FLOOR + LIP + 1):
-            deep = FLOOR + LIP - pile_top(xx, span) >= WET
+        top = pile_top(xx, span)
+        deep = FLOOR + LIP - top >= WET
+        for yy in range(int(round(top)), FLOOR + LIP + 1):
             if 0 <= yy < N and g[yy, xx] in (0, BODY):
                 g[yy, xx] = SHADE if yy > FLOOR and deep else BODY
 
@@ -221,7 +222,8 @@ def compose(f):
             yb, _ = warp(min(y + 1, SH - 1), x, m)
             _, xb = warp(y, min(x + 1, SW - 1), m)
             # a rect ends exactly where its neighbour begins (both round the
-            # same warped edge), so the sheet tiles: no tears, no fattening
+            # same warped edge): no tears down either axis, and no fattening.
+            # The shear still opens pinholes, which fill_holes below closes.
             y0 = int(round(ya)); y1 = max(int(round(yb)), y0 + 1)
             x0 = int(round(xa)); x1 = max(int(round(xb)), x0 + 1)
             g[max(y0, 0):min(y1, N), max(x0, 0):min(x1, N)] = BODY
@@ -238,11 +240,11 @@ def compose(f):
         rest = cy
         if span and span[2] >= 1:
             rest = min(pile_top(cx, span) + EYE_SINK, float(FLOOR))
-        lag = EYE_LAG * soft if c * SCALE > SW / 2 else 0.0
+        lag = EYE_LAG * soft if c * SCALE + rad > SW / 2 else 0.0
         cy = (cy + EYE_DROOP * soft) * (1 - soft) + rest * soft + lag
         if soft == 0:                        # still a hard ART eye, so draw the
-            y0 = int(round(cy - rad))        # cell itself: no rounded corners
-            x0 = int(round(cx - rad))
+            y0 = max(int(round(cy - rad)), 0)   # cell itself, no rounded corners
+            x0 = max(int(round(cx - rad)), 0)
             g[y0:y0 + SCALE, x0:x0 + SCALE] = EYE
         else:
             superellipse(g, cy, cx, rad * (1 - EYE_SQUASH * soft),
