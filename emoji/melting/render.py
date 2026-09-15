@@ -8,7 +8,8 @@ and less holding him up. His eyes go soft last and slide down the front of him,
 and what settles is a wide puddle with two dark smudges lying in it.
 
 Nothing here is a redrawn Clawd: the melt is a coordinate map over the shared
-ART grid, so frame 0 is exactly him.
+ART grid plus light on what has gone liquid, so frame 0 is exactly him -- his
+own orange, untouched. Only liquid lifts, and the puddle catches a glint.
 
 NOTE: this is the first renderer here to break CONTRIBUTING's seamless-loop
 constraint, deliberately. The melt runs one way only and then holds on the
@@ -52,6 +53,10 @@ PILE_RX = 60            # half-width the finished puddle spreads to
 PILE_H = 20             # how tall the finished puddle stands above the floor
 LIP = 2                 # px of puddle drawn below the floor line
 WET = 4                 # puddle height at which its underside reads as wet
+GLINT = 0.22            # fraction of the puddle's width that catches the light
+GLINT_H = 3             # px the glint sits below the puddle's surface, so it
+                        # reads as a highlight in the liquid and not as a second
+                        # white outline hugging the dome
 
 EYE_MELT = 0.30         # melt progress at which his eyes start to go soft
 EYE_DROOP = 5           # px they slide down his face while it still holds
@@ -62,14 +67,30 @@ EYE_SPREAD = 0.60       # ... and how much it widens doing it
 
 STILL = 21              # frame the gallery still is taken from
 
+WET_MIX = 0.09          # how far the puddle's underside sits under his own
+                        # colour. Shallow on purpose: anything deeper reads as
+                        # a dark bar ruled under him rather than shadow.
+GLOSS_MIX = 0.16        # how far the thinnest liquid lifts towards white
+GLOSS_STEPS = 4         # tints between solid Clawd and fully-runny liquid.
+                        # Fewer and the ramp bands; more and it's wasted palette.
+
+
+def mix(rgb, other, t):
+    return tuple(int(round(a + (b - a) * t)) for a, b in zip(rgb, other))
+
+
 COLORS = [
     (0, 0, 0),          # 0: transparent slot
     WHITE_RGB,          # 1: outline
     CLAWD_RGB,          # 2: body
     EYE_RGB,            # 3: eyes
-    (176, 88, 62),      # 4: the wet underside of the puddle
-]
+    mix(CLAWD_RGB, (0, 0, 0), WET_MIX),     # 4: the wet underside of the puddle
+] + [mix(CLAWD_RGB, WHITE_RGB, GLOSS_MIX * (i + 1) / GLOSS_STEPS)
+     for i in range(GLOSS_STEPS)]           # 5..: thinning liquid, lightest last
 T, OUTLINE, BODY, EYE, SHADE = 0, 1, 2, 3, 4
+LIQUID = list(range(5, 5 + GLOSS_STEPS))
+SHEEN = LIQUID[-1]
+CLAWD_INK = {BODY, SHADE, *LIQUID}          # every index that is made of Clawd
 PAL = bytes([c for rgb in COLORS for c in rgb] + [0] * (768 - 3 * len(COLORS)))
 
 GY, GX = len(ART), len(ART[0])
@@ -94,6 +115,15 @@ EYE_CELLS = [(r, c) for r, row in enumerate(ART)
 FEET = [x for x in range(SW) if SPRITE[SH - 1, x]]
 assert FEET, "the shared ART grid has no feet to melt from"
 assert CX + PILE_RX + 2 < N, "the puddle plus its outline would leave the canvas"
+
+
+def thinned(e):
+    """Palette index for body liquid `e` of the way to the floor: thinning liquid
+    holds less colour, so it lifts towards white (see NECK). Solid Clawd is
+    untouched, which is what keeps frame 0 exactly him."""
+    if e <= 0:
+        return BODY
+    return LIQUID[min(int(e ** 1.6 * GLOSS_STEPS), GLOSS_STEPS - 1)]
 
 
 def smoothstep(t):
@@ -180,14 +210,22 @@ def dome(g, span):
     lo, hi, h = span
     if h < 1:
         return
+    mid = (lo + hi) / 2
     for xx in range(int(np.floor(lo)), int(np.ceil(hi)) + 1):
         if not 0 <= xx < N:
             continue
         top = pile_top(xx, span)
         deep = FLOOR + LIP - top >= WET
+        lit = abs(xx - mid) < (hi - lo) * GLINT and h >= WET
         for yy in range(int(round(top)), FLOOR + LIP + 1):
-            if 0 <= yy < N and g[yy, xx] in (0, BODY):
-                g[yy, xx] = SHADE if yy > FLOOR and deep else BODY
+            if not (0 <= yy < N and (g[yy, xx] == 0 or g[yy, xx] in CLAWD_INK)):
+                continue
+            if yy > FLOOR and deep:
+                g[yy, xx] = SHADE
+            elif lit and 0 < yy - top <= GLINT_H:
+                g[yy, xx] = SHEEN
+            else:
+                g[yy, xx] = BODY
 
 
 def superellipse(g, cy, cx, ry, rx, p, color):
@@ -207,7 +245,11 @@ def fill_holes(g):
         p = np.pad(b, 1)                     # pad, don't roll: a roll would let
         nb = (p[:-2, 1:-1] + p[2:, 1:-1]     # one canvas edge fill the other
               + p[1:-1, :-2] + p[1:-1, 2:])
-        g[(b == 0) & (nb >= 3)] = BODY
+        v = np.pad(g, 1)                     # a pinhole takes a neighbour's own
+        take = np.maximum.reduce([v[:-2, 1:-1], v[2:, 1:-1],    # tint: filling it
+                                  v[1:-1, :-2], v[1:-1, 2:]])   # flat would speck
+        holes = (b == 0) & (nb >= 3)                             # the gloss ramp
+        g[holes] = np.where(take[holes] != 0, take[holes], BODY)
 
 
 def compose(f):
@@ -218,6 +260,7 @@ def compose(f):
         for x in range(SW):
             if not SPRITE[y, x]:
                 continue
+            e = give(y, x, m)
             ya, xa = warp(y, x, m)
             yb, _ = warp(min(y + 1, SH - 1), x, m)
             _, xb = warp(y, min(x + 1, SW - 1), m)
@@ -226,7 +269,7 @@ def compose(f):
             # The shear still opens pinholes, which fill_holes below closes.
             y0 = int(round(ya)); y1 = max(int(round(yb)), y0 + 1)
             x0 = int(round(xa)); x1 = max(int(round(xb)), x0 + 1)
-            g[max(y0, 0):min(y1, N), max(x0, 0):min(x1, N)] = BODY
+            g[max(y0, 0):min(y1, N), max(x0, 0):min(x1, N)] = thinned(e)
 
     fill_holes(g)
     span = pile_span(g, m)
@@ -261,6 +304,10 @@ def save():
         im = Image.frombytes("P", (N, N), g.tobytes())
         im.putpalette(PAL)
         frames.append(im)
+
+    dry = set(np.unique(np.frombuffer(frames[0].tobytes(), dtype=np.uint8)))
+    assert not dry & {SHADE, *LIQUID}, \
+        "frame 0 has melt colours on it — it must be plain, un-melted Clawd"
 
     frames[STILL].convert("RGBA").save(OUT / f"{NAME}_still.png")
 
