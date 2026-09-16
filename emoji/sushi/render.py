@@ -10,8 +10,8 @@ Clawd-coloured salmon pressed onto a bed of rice, about to be picked up.
   rice     : a rounded press of cream grains with a broad nori band across the
              front and a shaded underside, so it still reads as an object on a
              white Slack background.
-  board    : a wooden geta across the bottom. The nigiri lifts off it, and that
-             opening gap is what sells the pick-up at 32 px.
+  board    : a wooden board across the bottom. The nigiri lifts off it, and
+             that opening gap is what sells the pick-up at 32 px.
   sticks   : two tapered chopsticks reaching in from the right edge, on a line
              that stays clear of his outstretched hand -- a rod drawn across the
              sprite lops the hand off and leaves it floating as an island. The
@@ -185,12 +185,14 @@ def draw_board(g):
     g[BOARD_Y1 - 3:BOARD_Y1, BOARD_X0:BOARD_X1] = BOARD_D
 
 
-FAR, NEAR = ((+1, STICK_D),), ((-1, STICK),)
+FAR, NEAR = ((+1, STICK_D),), ((-1, STICK),)   # (side, colour); side picks
+                                              # which way off the centre line
 
 
 def draw_sticks(g, gap, dy, dx, rods):
-    """One side of the pair. The two rods share a pivot and their tips sit `gap`
-    apart, but they are drawn in two passes so the piece can come between them.
+    """Draw the rods in `rods` -- a sequence of (side, colour). Every rod shares
+    the same pivot and its tip sits `gap`/2 off the centre line on its side.
+
     Offsets stay sub-pixel: a diagonal rod re-rasterises on every fractional
     shift, which is what keeps neighbouring frames distinct."""
     A = np.zeros((N, N), dtype=np.uint8)
@@ -226,18 +228,20 @@ def compose(f):
 
     g = np.zeros((N, N), dtype=np.uint8)
     draw_board(g)
-    draw_sticks(g, gap, stick_dy, stick_dx, FAR)
+    draw_sticks(g, gap, stick_dy, stick_dx, FAR)      # rods straddle the piece:
+                                                     # this one goes behind it
     face = HAPPY if track(t, LIFT_KEYS) > DELIGHT else BODY
     blit(g, face, CLAWD_TOP + nigiri_dy - PAD, CX - 6 * SCALE - PAD)
     blit(g, RICEP, RICE_TOP + nigiri_dy - PAD, CX - RICE_W // 2 - PAD)
-    draw_sticks(g, gap, stick_dy, stick_dx, NEAR)
+    draw_sticks(g, gap, stick_dy, stick_dx, NEAR)    # and this one in front
     return g
 
 
 def save():
+    grids = [compose(f) for f in range(F)]
     frames = []
-    for f in range(F):
-        im = Image.frombytes("P", (N, N), compose(f).tobytes())
+    for g in grids:
+        im = Image.frombytes("P", (N, N), g.tobytes())
         im.putpalette(PAL)
         frames.append(im)
 
@@ -252,12 +256,17 @@ def save():
         "Pillow dropped duplicate frames -- a stretch of the loop is frozen, "
         "and the surviving frames no longer carry the intended timing")
 
-    shown = {int(np.isin(compose(f), (CLAWD, EYE, BLUSH)).sum()) for f in range(F)}
-    assert len(shown) == 1, (
-        f"the sprite's silhouette changes size across the loop {sorted(shown)} "
-        "-- a chopstick is crossing him and cutting a piece of the creature off")
+    bare = np.zeros((N, N), dtype=np.uint8)          # the piece with no sticks drawn
+    blit(bare, BODY, CLAWD_TOP - PAD, CX - 6 * SCALE - PAD)
+    blit(bare, RICEP, RICE_TOP - PAD, CX - RICE_W // 2 - PAD)
+    want = int(np.isin(bare, (CLAWD, EYE)).sum())
+    for f, g in enumerate(grids):
+        got = int(np.isin(g, (CLAWD, EYE, BLUSH)).sum())
+        assert got == want, (
+            f"frame {f} shows {got} px of the creature, not {want} -- a chopstick is "
+            "crossing him and cutting a piece off")
 
-    pts = [np.nonzero(compose(f)) for f in range(F)]
+    pts = [np.nonzero(g) for g in grids]
     ys = np.concatenate([p[0] for p in pts]); xs = np.concatenate([p[1] for p in pts])
     print(f"{NAME}: {F} frames @ {DUR}ms, gif={kb:.0f} KB")
     print(f"margins  t {ys.min()}  b {127 - ys.max()}  l {xs.min()}  r {127 - xs.max()}")
