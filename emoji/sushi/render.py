@@ -77,7 +77,8 @@ GAP_OPEN, GAP_SHUT = 18, 6
 LIFT = 12                      # how far the nigiri comes off the board
 BOB = 2                        # idle breath while it sits there
 SWAY = 1.5                     # the sticks waver while they're still empty
-DELIGHT = 0.35                 # lift fraction past which the happy face shows
+DELIGHT = 0.2                  # lift fraction past which the happy face shows;
+                               # at F=22 that is frames 8..16, clear of both edges
 
 BLUSH_AT = ((27, 26), (27, 78))   # cheek centres in sprite px, one per eye
 BLUSH_R = (5, 9)                  # half-height, half-width of each patch
@@ -142,8 +143,10 @@ def build_body(delighted=False):
         for cy, cx in BLUSH_AT:
             for dy in range(-ry, ry + 1):
                 for dx in range(-rx, rx + 1):
-                    if (dy / ry) ** 2 + (dx / rx) ** 2 <= 1 and A[cy + dy, cx + dx] == CLAWD:
-                        A[cy + dy, cx + dx] = BLUSH
+                    y, x = cy + dy, cx + dx
+                    if ((dy / ry) ** 2 + (dx / rx) ** 2 <= 1 and 0 <= y < A.shape[0]
+                            and 0 <= x < A.shape[1] and A[y, x] == CLAWD):
+                        A[y, x] = BLUSH
 
     A[border_mask(A > 0, pen_disk(2))] = WHITE
     return A
@@ -176,7 +179,7 @@ def build_rice():
     return A
 
 
-BODY, HAPPY, RICEP = build_body(), build_body(True), build_rice()
+BODY, HAPPY, RICEP = build_body(), build_body(delighted=True), build_rice()
 
 
 def draw_board(g):
@@ -193,7 +196,7 @@ def draw_sticks(g, gap, dy, dx, rods):
     """Draw the rods in `rods` -- a sequence of (side, colour). Every rod shares
     the same pivot and its tip sits `gap`/2 off the centre line on its side.
 
-    Offsets stay sub-pixel: a diagonal rod re-rasterises on every fractional
+    Offsets arrive unrounded: a diagonal rod re-rasterises on every fractional
     shift, which is what keeps neighbouring frames distinct."""
     A = np.zeros((N, N), dtype=np.uint8)
     by, bx = BUTT[0] + dy, BUTT[1] + dx
@@ -214,13 +217,19 @@ def draw_sticks(g, gap, dy, dx, rods):
     blit(g, A, 0, 0)
 
 
+def nigiri_offset(t):
+    """How far the whole piece sits off its resting place, in whole pixels."""
+    return round(BOB * math.sin(2 * math.pi * t) - LIFT * track(t, LIFT_KEYS))
+
+
 def compose(f):
     t = f / F
     swing = 2 * math.pi * t
-    rise = LIFT * track(t, LIFT_KEYS)
+    lift = track(t, LIFT_KEYS)
+    rise = LIFT * lift
     jaw = track(t, GAP_KEYS)
     bob = BOB * math.sin(swing)
-    nigiri_dy = round(bob - rise)
+    nigiri_dy = nigiri_offset(t)
 
     gap = GAP_SHUT + (GAP_OPEN - GAP_SHUT) * jaw
     stick_dy = bob * (1 - jaw) - rise
@@ -230,7 +239,7 @@ def compose(f):
     draw_board(g)
     draw_sticks(g, gap, stick_dy, stick_dx, FAR)      # rods straddle the piece:
                                                      # this one goes behind it
-    face = HAPPY if track(t, LIFT_KEYS) > DELIGHT else BODY
+    face = HAPPY if lift > DELIGHT else BODY
     blit(g, face, CLAWD_TOP + nigiri_dy - PAD, CX - 6 * SCALE - PAD)
     blit(g, RICEP, RICE_TOP + nigiri_dy - PAD, CX - RICE_W // 2 - PAD)
     draw_sticks(g, gap, stick_dy, stick_dx, NEAR)    # and this one in front
@@ -256,20 +265,32 @@ def save():
         "Pillow dropped duplicate frames -- a stretch of the loop is frozen, "
         "and the surviving frames no longer carry the intended timing")
 
-    bare = np.zeros((N, N), dtype=np.uint8)          # the piece with no sticks drawn
-    blit(bare, BODY, CLAWD_TOP - PAD, CX - 6 * SCALE - PAD)
-    blit(bare, RICEP, RICE_TOP - PAD, CX - RICE_W // 2 - PAD)
-    want = int(np.isin(bare, (CLAWD, EYE)).sum())
+    assert np.array_equal(compose(F), grids[0]), "the loop does not wrap"
+
+    def piece(dy):
+        A = np.zeros((N, N), dtype=np.uint8)
+        blit(A, BODY, CLAWD_TOP + dy - PAD, CX - 6 * SCALE - PAD)
+        blit(A, RICEP, RICE_TOP + dy - PAD, CX - RICE_W // 2 - PAD)
+        return A
+
+    rest = piece(0)
+    want = int(np.isin(rest, (CLAWD, EYE)).sum())
+    whole = int((rest != 0).sum())                   # outline included
     for f, g in enumerate(grids):
         got = int(np.isin(g, (CLAWD, EYE, BLUSH)).sum())
         assert got == want, (
             f"frame {f} shows {got} px of the creature, not {want} -- a chopstick is "
             "crossing him and cutting a piece off")
+        assert int((piece(nigiri_offset(f / F)) != 0).sum()) == whole, (
+            f"frame {f} pushes the piece off the canvas -- his white outline is cropping")
 
-    pts = [np.nonzero(g) for g in grids]
+    # measured against the piece, not the frame: the board bleeds to three edges
+    # and would peg those margins at 0 whatever the nigiri did (CONTRIBUTING)
+    FIGURE = (CLAWD, EYE, BLUSH, RICE, RICE_D, NORI, NORI_HI)
+    pts = [np.nonzero(np.isin(g, FIGURE)) for g in grids]
     ys = np.concatenate([p[0] for p in pts]); xs = np.concatenate([p[1] for p in pts])
     print(f"{NAME}: {F} frames @ {DUR}ms, gif={kb:.0f} KB")
-    print(f"margins  t {ys.min()}  b {127 - ys.max()}  l {xs.min()}  r {127 - xs.max()}")
+    print(f"piece margins  t {ys.min()}  b {127 - ys.max()}  l {xs.min()}  r {127 - xs.max()}")
 
 
 if __name__ == "__main__":
