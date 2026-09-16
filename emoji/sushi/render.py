@@ -4,7 +4,9 @@ Clawd-coloured salmon pressed onto a bed of rice, about to be picked up.
 
   Clawd    : the authentic sprite, unreshaped and uncostumed. His #DA7758
              already *is* salmon, so the only thing that turns the creature into
-             a topping is the rice coming up over his little legs.
+             a topping is the rice coming up over his little legs. The moment he
+             leaves the board his eyes squeeze into delighted '^' arcs and his
+             cheeks go pink -- he is thrilled to be eaten.
   rice     : a rounded press of cream grains with a broad nori band across the
              front and a shaded underside, so it still reads as an object on a
              white Slack background.
@@ -28,7 +30,7 @@ import numpy as np
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from shared.clawd import ART, border_mask, pen_disk
+from shared.clawd import ART, border_mask, happy_eye, pen_disk
 
 OUT = Path(__file__).resolve().parent
 NAME = "clawd_sushi"
@@ -50,9 +52,10 @@ COLORS = [
     (162, 112, 66),     # 9  chopstick (far)
     (150, 104, 62),     # 10 board
     (110, 72, 42),      # 11 board shade
+    (233, 116, 129),    # 12 blush
 ]
 (T, CLAWD, EYE, WHITE, RICE, RICE_D,
- NORI, NORI_HI, STICK, STICK_D, BOARD, BOARD_D) = range(12)
+ NORI, NORI_HI, STICK, STICK_D, BOARD, BOARD_D, BLUSH) = range(13)
 PAL = bytes([c for rgb in COLORS for c in rgb] + [0] * (768 - 3 * len(COLORS)))
 
 # ---- layout (world px) ------------------------------------------------
@@ -74,6 +77,10 @@ GAP_OPEN, GAP_SHUT = 18, 6
 LIFT = 12                      # how far the nigiri comes off the board
 BOB = 2                        # idle breath while it sits there
 SWAY = 1.5                     # the sticks waver while they're still empty
+DELIGHT = 0.35                 # lift fraction past which the happy face shows
+
+BLUSH_AT = ((27, 26), (27, 78))   # cheek centres in sprite px, one per eye
+BLUSH_R = (5, 9)                  # half-height, half-width of each patch
 
 PAD = 4                        # room for the white outline on every sprite
 
@@ -112,15 +119,31 @@ def blit(g, arr, y0, x0):
             g[y, x] = arr[ry, rx]
 
 
-def build_body():
+def build_body(delighted=False):
+    """The sprite, optionally wearing the happy face. Both variants cover exactly
+    the same pixels -- the eye cell is recoloured, never resized -- so the
+    occlusion guard in save() still measures only what the chopsticks hide."""
     h, w = 8 * SCALE, 12 * SCALE
     A = np.zeros((h + 2 * PAD, w + 2 * PAD), dtype=np.uint8)
     for r, row in enumerate(ART):
         for c, ch in enumerate(row):
             if ch == ".":
                 continue
+            fill = CLAWD if (delighted or ch != "O") else EYE
             A[PAD + r * SCALE:PAD + (r + 1) * SCALE,
-              PAD + c * SCALE:PAD + (c + 1) * SCALE] = EYE if ch == "O" else CLAWD
+              PAD + c * SCALE:PAD + (c + 1) * SCALE] = fill
+
+    if delighted:
+        for r, row in enumerate(ART):
+            for c, ch in enumerate(row):
+                if ch == "O":
+                    happy_eye(A, PAD + r * SCALE, PAD + c * SCALE, SCALE, EYE)
+        ry, rx = BLUSH_R
+        for cy, cx in BLUSH_AT:
+            for dy in range(-ry, ry + 1):
+                for dx in range(-rx, rx + 1):
+                    if (dy / ry) ** 2 + (dx / rx) ** 2 <= 1 and A[cy + dy, cx + dx] == CLAWD:
+                        A[cy + dy, cx + dx] = BLUSH
 
     A[border_mask(A > 0, pen_disk(2))] = WHITE
     return A
@@ -153,7 +176,7 @@ def build_rice():
     return A
 
 
-BODY, RICEP = build_body(), build_rice()
+BODY, HAPPY, RICEP = build_body(), build_body(True), build_rice()
 
 
 def draw_board(g):
@@ -204,7 +227,8 @@ def compose(f):
     g = np.zeros((N, N), dtype=np.uint8)
     draw_board(g)
     draw_sticks(g, gap, stick_dy, stick_dx, FAR)
-    blit(g, BODY, CLAWD_TOP + nigiri_dy - PAD, CX - 6 * SCALE - PAD)
+    face = HAPPY if track(t, LIFT_KEYS) > DELIGHT else BODY
+    blit(g, face, CLAWD_TOP + nigiri_dy - PAD, CX - 6 * SCALE - PAD)
     blit(g, RICEP, RICE_TOP + nigiri_dy - PAD, CX - RICE_W // 2 - PAD)
     draw_sticks(g, gap, stick_dy, stick_dx, NEAR)
     return g
@@ -228,9 +252,9 @@ def save():
         "Pillow dropped duplicate frames -- a stretch of the loop is frozen, "
         "and the surviving frames no longer carry the intended timing")
 
-    shown = {int(np.isin(compose(f), (CLAWD, EYE)).sum()) for f in range(F)}
+    shown = {int(np.isin(compose(f), (CLAWD, EYE, BLUSH)).sum()) for f in range(F)}
     assert len(shown) == 1, (
-        f"the sprite shows a different number of pixels on different frames {sorted(shown)} "
+        f"the sprite's silhouette changes size across the loop {sorted(shown)} "
         "-- a chopstick is crossing him and cutting a piece of the creature off")
 
     pts = [np.nonzero(compose(f)) for f in range(F)]

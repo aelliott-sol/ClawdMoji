@@ -76,6 +76,26 @@ def shut_eye(A, ty, tx, scale, color):
                 A[y + k, tx + i] = color
 
 
+def happy_eye(A, ty, tx, scale, color):
+    """Draw a closed, smiling '^' eye over one eye cell, at (ty, tx) with cell
+    `scale`. The mirror of shut_eye: the arc peaks in the middle and falls away
+    at both ends, which is the anime delight eye rather than a sleeping lid.
+
+    Fat for the same reason shut_eye is -- at 32 px a 2 px arc renders as half a
+    pixel and the eye just looks missing.
+    """
+    rise = max(2, scale // 3)
+    thick = max(2, round(scale / 2.5))
+    top = ty + scale // 2 - rise // 2 - thick // 3
+    H, W = A.shape
+    for i in range(scale):
+        t = 2 * i / (scale - 1) - 1                  # -1 .. +1 across the cell
+        y = int(round(top + rise * t * t))           # ends ride lower
+        for k in range(thick):
+            if 0 <= y + k < H and 0 <= tx + i < W:
+                A[y + k, tx + i] = color
+
+
 def border_mask(body, pen):
     """Boolean outline ring around a body mask: dilate `body` by every (dy, dx)
     offset in `pen`, then subtract the body itself. This is exactly the
