@@ -20,13 +20,13 @@ OUT = Path(__file__).resolve().parent
 NAME = "clawd_detective"
 
 N = 128                 # canvas (Slack emoji size)
-F = 36                  # frames in the loop
-DUR = 60                # ms per frame (multiple of 10: GIFs store centiseconds)
+F = 24                  # frames in the loop
+DUR = 90                # ms per frame (multiple of 10: GIFs store centiseconds)
 SCALE = 9               # 108x72 sprite: as wide as the sway allows
-STILL = 18              # mid-peer frame for the gallery still
+STILL = 12              # mid-peer frame for the gallery still
 
-RAISE = (4, 11)         # frames over which the glass comes up
-LOWER = (27, 33)        # ... and goes back down; frame 0 == frame F at rest
+RAISE = (3, 7)          # frames over which the glass comes up
+LOWER = (18, 22)        # ... and goes back down; frame 0 == frame F at rest
 SWAY = 4                # px he leans either way while peering
 SCAN = 2                # px the lens drifts across his eye while he leans
 ZOOM = 1.7              # lens magnification at the start of the peer
