@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """Clawdlock Holmes — Clawd in a deerstalker, peering through a magnifying glass.
 
-The glass pivots on his own right hand. It comes up over his right eye, he
-squints the other one, sways side to side while he studies you, then lowers it.
-The lens really magnifies: it resamples the frame underneath it, so what you
-see in the glass is his eye, blown up.
+He raises the glass over his right eye, squints the other one, leans side to
+side while he studies you (feet planted), then lowers it. The lens resamples
+the frame underneath it, so what you see in the glass is his eye, magnified.
+
+NOTE: this one is deliberately not built on the shared ART grid. It is drawn on
+its own 72-cell grid, read off the terminal splash's half-block glyphs (wide
+body, one-row hands, tall eyes), then cropped and scaled up to the canvas. The
+2 px white outline is still applied at full resolution.
 """
 import math
 import sys
@@ -14,64 +18,99 @@ import numpy as np
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from shared.clawd import ART, CLAWD_RGB, EYE_RGB, WHITE_RGB, border_mask, pen_disk
+from shared.clawd import WHITE_RGB, border_mask, pen_disk
 
 OUT = Path(__file__).resolve().parent
 NAME = "clawd_detective"
 
 N = 128                 # canvas (Slack emoji size)
+G = 72                  # drawing grid, before the crop
+CROP = (4, 6, 60, 62)   # grid window scaled up to the canvas: 56 cells -> ~2.3 px each
 F = 30                  # frames in the loop
 DUR = 70                # ms per frame (multiple of 10: GIFs store centiseconds)
-SCALE = 9               # 108x72 sprite: as wide as the sway allows
 STILL = 15              # mid-peer frame for the gallery still
 
 RAISE = (3, 9)          # frames over which the glass comes up
-LOWER = (22, 28)        # ... and goes back down; frame 0 == frame F at rest
-SWAY = 4                # px he leans either way while peering
-SCAN = 2                # px the lens drifts across his eye while he leans
-ZOOM = 3.0              # lens magnification at the start of the peer
-ZOOM_PULSE = 0.5        # extra magnification at the middle of it
-
-LENS_R = 21             # outer radius of the rim
-RIM = 4                 # rim thickness
-TAIL = 7                # px of handle poking out past his hand
-REST_ANG = 120          # degrees: lens hanging down in front of him
+LOWER = (22, 28)        # ... and back down; frame 0 == frame F at rest
+BOB = {1, 2, F - 2, F - 1}  # rest frames where he settles one cell
+SWAY = 2.5              # cells his upper body leans either way while peering
+SCAN = 1.5              # cells the lens drifts across his eye
+ZOOM = 2.2              # lens magnification at the start of the peer
+ZOOM_PULSE = 0.4        # extra magnification at the middle of it
+LENS_R = (7.0, 9.0)     # lens radius at rest, raised
+REST_HAND, UP_HAND = (55.0, 41.0), (52.0, 44.5)
+REST_ANG, UP_ANG = 135, 225     # degrees: lens down in front of him, up over his eye
 SQUINT_AT = 0.55        # how far up the glass is before the other eye squints
+LEG_ROW = 50            # grid rows from here down stay planted while he leans
 
-COLORS = [
-    (0, 0, 0),          # 0: transparent slot
-    WHITE_RGB,          # 1: outline
-    CLAWD_RGB,          # 2: body
-    EYE_RGB,            # 3: eyes
-    (196, 160, 118),    # 4: hat tweed
-    (150, 108, 70),     # 5: hat check
-    (110, 72, 42),      # 6: hat band, bills, bow
-    (64, 64, 72),       # 7: rim
-    (170, 170, 182),    # 8: rim highlight
-    (128, 80, 44),      # 9: handle
-    (205, 232, 245),    # 10: glass
-]
-T, OUTLINE, BODY, EYE, TWEED, CHECK, BAND, RIM_C, RIM_HI, HANDLE, GLASS = range(11)
-PAL = bytes([c for rgb in COLORS for c in rgb] + [0] * (768 - 3 * len(COLORS)))
+CLAWD = (215, 119, 87)
+EYE = (20, 20, 20)
+HAT = (196, 160, 118)
+HAT_DARK = (122, 82, 48)
+HAT_LINE = (150, 108, 70)
+RING = (70, 70, 78)
+RING_HI = (170, 170, 180)
+HANDLE = (110, 70, 40)
+HANDLE_HI = (150, 100, 60)
+GLASS = (205, 232, 245)
+GLINT = WHITE_RGB
+TINT = 0.15             # how much the glass tints what it magnifies
 
-GY, GX = len(ART), len(ART[0])
-SH, SW = GY * SCALE, GX * SCALE
-HAT_H = round(2.95 * SCALE)
-Y0 = (N - SH - HAT_H) // 2 + HAT_H
-X0 = (N - SW) // 2
 
-EYE_CELLS = [(r, c) for r, row in enumerate(ART) for c, ch in enumerate(row) if ch == "O"]
-SQUINT_EYE = min(EYE_CELLS, key=lambda rc: rc[1])
-LOOK_EYE = max(EYE_CELLS, key=lambda rc: rc[1])
-HAND = (2 * SCALE + SCALE, (GX - 1) * SCALE + SCALE // 4)
-EYE_C = (LOOK_EYE[0] * SCALE + SCALE / 2, LOOK_EYE[1] * SCALE + SCALE / 2)
-UP_ANG = math.degrees(math.atan2(EYE_C[0] - HAND[0], EYE_C[1] - HAND[1])) % 360
-REACH = math.hypot(EYE_C[0] - HAND[0], EYE_C[1] - HAND[1])
+def rect(a, x0, y0, x1, y1, c):
+    a[max(y0, 0):max(y1 + 1, 0), max(x0, 0):max(x1 + 1, 0)] = c + (255,)
+
+
+def line(a, p, q, w, c):
+    (x0, y0), (x1, y1) = p, q
+    n = int(max(abs(x1 - x0), abs(y1 - y0)) * 2) + 1
+    for i in range(n + 1):
+        t = i / n
+        cx, cy = x0 + (x1 - x0) * t, y0 + (y1 - y0) * t
+        for dy in range(-w, w + 1):
+            for dx in range(-w, w + 1):
+                if dx * dx + dy * dy <= w * w + 0.5:
+                    x, y = round(cx + dx), round(cy + dy)
+                    if 0 <= x < G and 0 <= y < G:
+                        a[y, x] = c + (255,)
+
+
+def draw_hat(a, oy):
+    dome = {17: (26, 37), 18: (23, 40), 19: (21, 42), 20: (20, 43), 21: (19, 44),
+            22: (19, 44), 23: (18, 45), 24: (18, 45), 25: (18, 45), 26: (18, 45)}
+    for y, (x0, x1) in dome.items():
+        for x in range(x0, x1 + 1):
+            rect(a, x, y + oy, x, y + oy, HAT_LINE if (x % 5 == 0 or y % 4 == 0) else HAT)
+    rect(a, 16, 27 + oy, 47, 29 + oy, HAT_DARK)
+    rect(a, 10, 28 + oy, 16, 30 + oy, HAT_DARK)
+    rect(a, 47, 28 + oy, 53, 30 + oy, HAT_DARK)
+    rect(a, 29, 14 + oy, 30, 16 + oy, HAT_DARK)
+    rect(a, 33, 14 + oy, 34, 16 + oy, HAT_DARK)
+    rect(a, 31, 15 + oy, 32, 16 + oy, HAT_LINE)
+
+
+def draw_clawd(a, oy, squint):
+    rect(a, 14, 26 + oy, 49, 43 + oy, CLAWD)
+    rect(a, 17, 44 + oy, 46, 49 + oy, CLAWD)
+    rect(a, 8, 38 + oy, 13, 43 + oy, CLAWD)
+    for lx in (17, 23, 38, 44):
+        rect(a, lx, 50 + oy, lx + 2, 55 + oy, CLAWD)
+    if squint:
+        rect(a, 19, 35 + oy, 24, 36 + oy, EYE)
+    else:
+        rect(a, 20, 32 + oy, 22, 37 + oy, EYE)
+    rect(a, 41, 32 + oy, 43, 37 + oy, EYE)
+    rect(a, 42, 33 + oy, 42, 33 + oy, GLINT)
+    draw_hat(a, oy - 4)
 
 
 def ease(t):
     t = min(max(t, 0.0), 1.0)
     return t * t * (3 - 2 * t)
+
+
+def lerp(a, b, t):
+    return a + (b - a) * t
 
 
 def raised(f):
@@ -92,121 +131,122 @@ def peer(f):
     return None
 
 
-def disk(g, cy, cx, r, color):
-    yy, xx = np.ogrid[:N, :N]
-    g[(yy - cy) ** 2 + (xx - cx) ** 2 <= r * r] = color
+def lean_dx(y, sway):
+    return round(sway) if y < LEG_ROW else 0
 
 
-def thick_line(g, y0, x0, y1, x1, r, color):
-    n = int(max(abs(y1 - y0), abs(x1 - x0))) + 1
-    for i in range(n + 1):
-        t = i / n
-        disk(g, y0 + (y1 - y0) * t, x0 + (x1 - x0) * t, r, color)
+def lean(a, sway):
+    out = np.zeros_like(a)
+    s = round(sway)
+    top = a[:LEG_ROW]
+    if s >= 0:
+        out[:LEG_ROW, s:] = top[:, :G - s]
+    else:
+        out[:LEG_ROW, :s] = top[:, -s:]
+    out[LEG_ROW:] = a[LEG_ROW:]
+    return out
 
 
-def draw_clawd(g, x0, squint):
-    for r, row in enumerate(ART):
-        for c, ch in enumerate(row):
-            if ch == ".":
-                continue
-            ty, tx = Y0 + r * SCALE, x0 + c * SCALE
-            g[ty:ty + SCALE, tx:tx + SCALE] = EYE if ch == "O" else BODY
-    if squint:
-        r, c = SQUINT_EYE
-        ty, tx = Y0 + r * SCALE, x0 + c * SCALE
-        g[ty:ty + SCALE, tx:tx + SCALE] = BODY
-        lid = max(3, SCALE // 3)
-        mid = ty + SCALE // 2 + 1
-        g[mid - lid // 2:mid - lid // 2 + lid, tx - 1:tx + SCALE + 1] = EYE
+def magnify(scene, a, cx, cy, r, zoom):
+    yy, xx = np.mgrid[:G, :G]
+    inside = (xx - cx) ** 2 + (yy - cy) ** 2 <= r * r
+    sx = np.clip(np.round(cx + (xx - cx) / zoom).astype(int), 0, G - 1)
+    sy = np.clip(np.round(cy + (yy - cy) / zoom).astype(int), 0, G - 1)
+    src = scene[sy, sx]
+    tinted = np.round(src[..., :3] * (1 - TINT) + np.array(GLASS) * TINT).astype(np.uint8)
+    empty = src[..., 3] == 0
+    a[inside & empty] = GLASS + (255,)
+    a[inside & ~empty, :3] = tinted[inside & ~empty]
+    a[inside & ~empty, 3] = 255
 
 
-def draw_hat(g, x0):
-    s = SCALE
-    yy, xx = np.mgrid[:N, :N]
-    cy, cx = Y0 - 0.35 * s, x0 + 6 * s
-    dome = (((yy - cy) / (2.3 * s)) ** 2 + ((xx - cx) / (4.3 * s)) ** 2 <= 1) & (yy <= cy)
-    check = ((yy - Y0) % 6 < 2) | ((xx - x0) % 6 < 2)
-    g[dome] = TWEED
-    g[dome & check] = CHECK
-
-    def box(y_a, y_b, x_a, x_b):
-        g[round(Y0 + y_a * s):round(Y0 + y_b * s), round(x0 + x_a * s):round(x0 + x_b * s)] = BAND
-
-    box(-0.6, 0.35, 1.5, 10.5)
-    box(-0.2, 0.45, 0.4, 1.5)
-    box(-0.2, 0.45, 10.5, 11.6)
-    box(-2.95, -2.45, 5.5, 6.5)
+def ring(a, cx, cy, r):
+    yy, xx = np.mgrid[:G, :G]
+    d = np.hypot(xx - cx, yy - cy)
+    band = (d >= r - 0.4) & (d <= r + 1.3)
+    hi = band & (xx < cx) & (yy < cy)
+    a[band & ~hi] = RING + (255,)
+    a[hi] = RING_HI + (255,)
 
 
-def compose(f):
+def frame_rgba(f):
+    f %= F
     r = raised(f)
     p = peer(f)
-    sway = round(SWAY * math.sin(2 * math.pi * p)) if p is not None else 0
-    scan = SCAN * math.cos(2 * math.pi * p) if p is not None else 0.0
+    sway = SWAY * math.sin(2 * math.pi * p) if p is not None else 0.0
+    scan = round(SCAN * math.cos(2 * math.pi * p)) if p is not None else 0
     zoom = ZOOM + (ZOOM_PULSE * math.sin(math.pi * p) if p is not None else 0.0)
-    x0 = X0 + sway
+    bob = 1 if f in BOB else 0
 
-    base = np.zeros((N, N), dtype=np.uint8)
-    draw_clawd(base, x0, squint=r > SQUINT_AT)
-    draw_hat(base, x0)
-    base[border_mask(base != 0, pen_disk(2))] = OUTLINE
+    flat = np.zeros((G, G, 4), dtype=np.uint8)
+    draw_clawd(flat, bob, squint=r > SQUINT_AT)
+    scene = lean(flat, sway)
 
-    ang = math.radians(REST_ANG + (UP_ANG - REST_ANG) * r)
-    hy, hx = Y0 + HAND[0], x0 + HAND[1]
-    ly = hy + REACH * math.sin(ang)
-    lx = hx + REACH * math.cos(ang) + scan
+    hy = lerp(REST_HAND[1], UP_HAND[1], r) + bob
+    hx = lerp(REST_HAND[0], UP_HAND[0], r) + lean_dx(hy, sway)
+    ang = math.radians(lerp(REST_ANG, UP_ANG, r))
+    lens_r = lerp(*LENS_R, r)
+    reach = lens_r + 5
+    lx = hx + reach * math.cos(ang) + scan
+    ly = hy + reach * math.sin(ang)
 
-    g = base.copy()
-    ey, ex = ly - LENS_R * math.sin(ang), lx - LENS_R * math.cos(ang)
-    ty, tx = hy - TAIL * math.sin(ang), hx - TAIL * math.cos(ang)
-    thick_line(g, ey, ex, ty, tx, 2, HANDLE)
+    a = scene.copy()
+    line(a, (49 + lean_dx(40.5, sway), 40.5 + bob), (hx, hy), 2, CLAWD)
+    edge = (lx - (lens_r + 1) * math.cos(ang), ly - (lens_r + 1) * math.sin(ang))
+    line(a, edge, (hx, hy), 1, HANDLE)
+    line(a, (lerp(edge[0], hx, 0.4), lerp(edge[1], hy, 0.4)), (hx, hy), 1, HANDLE_HI)
+    magnify(scene, a, lx, ly, lens_r, zoom)
+    ring(a, lx, ly, lens_r)
+    gx, gy = round(lx - 3), round(ly - 4)
+    rect(a, gx, gy, gx + 1, gy, GLINT)
+    rect(a, gx, gy, gx, gy + 1, GLINT)
 
-    yy, xx = np.mgrid[:N, :N]
-    d = np.hypot(yy - ly, xx - lx)
-    inner = d < LENS_R - RIM
-    sy = np.clip(np.round(ly + (yy - ly) / zoom).astype(int), 0, N - 1)
-    sx = np.clip(np.round(lx + (xx - lx) / zoom).astype(int), 0, N - 1)
-    seen = base[sy, sx]
-    g[inner] = np.where(seen[inner] == 0, GLASS, seen[inner])
+    im = Image.fromarray(a, "RGBA").crop(CROP).resize((N, N), Image.NEAREST)
+    return np.asarray(im)
 
-    ey0, ex0 = Y0 + LOOK_EYE[0] * SCALE, x0 + LOOK_EYE[1] * SCALE
-    my, mx = ly + (ey0 - ly) * zoom, lx + (ex0 - lx) * zoom
-    cl = max(3, round(zoom * 2))
-    cy_, cx_ = round(my + SCALE * zoom * 0.18), round(mx + SCALE * zoom * 0.18)
-    catch = np.zeros_like(inner)
-    catch[cy_:cy_ + cl, cx_:cx_ + cl] = True
-    g[catch & inner & (g == EYE)] = OUTLINE
 
-    rim = (d >= LENS_R - RIM) & (d <= LENS_R)
-    g[rim] = RIM_C
-    g[rim & (yy < ly) & (xx < lx)] = RIM_HI
-    gy, gx = round(ly - LENS_R * 0.5), round(lx - LENS_R * 0.5)
-    g[gy:gy + 3, gx:gx + 2] = OUTLINE
-    g[gy:gy + 2, gx:gx + 3] = OUTLINE
+def palette(rgba_frames):
+    """One shared palette for every frame: index 0 transparent, 1 the outline."""
+    colors = {WHITE_RGB}
+    for a in rgba_frames:
+        colors |= {tuple(int(v) for v in c) for c in a[a[..., 3] > 0][:, :3]}
+    ordered = [WHITE_RGB] + sorted(colors - {WHITE_RGB})
+    assert len(ordered) < 256, f"{len(ordered)} colours won't fit one GIF palette"
+    return [(0, 0, 0)] + ordered
 
-    g[border_mask(g != 0, pen_disk(2))] = OUTLINE
+
+def compose(f, colors):
+    a = frame_rgba(f)
+    lut = {c: i for i, c in enumerate(colors)}
+    g = np.zeros((N, N), dtype=np.uint8)
+    solid = a[..., 3] > 0
+    g[solid] = [lut[tuple(int(v) for v in c)] for c in a[solid][:, :3]]
+    g[border_mask(g != 0, pen_disk(2))] = 1
     return g
 
 
 def save():
-    frames = []
-    for f in range(F):
-        im = Image.frombytes("P", (N, N), compose(f).tobytes())
-        im.putpalette(PAL)
-        frames.append(im)
+    colors = palette(frame_rgba(f) for f in range(F))
+    pal = bytes([c for rgb in colors for c in rgb] + [0] * (768 - 3 * len(colors)))
+    grids = [compose(f, colors) for f in range(F)]
+    assert np.array_equal(grids[0], compose(F, colors)), "loop seam: frame F must equal frame 0"
 
-    assert np.array_equal(compose(0), compose(F)), "loop seam: frame F must equal frame 0"
+    frames = []
+    for g in grids:
+        im = Image.frombytes("P", (N, N), g.tobytes())
+        im.putpalette(pal)
+        frames.append(im)
 
     frames[STILL].convert("RGBA").save(OUT / f"{NAME}_still.png")
 
     gif = OUT / f"{NAME}.gif"
     frames[0].save(
         gif, save_all=True, append_images=frames[1:], duration=DUR, loop=0,
-        transparency=T, disposal=2, optimize=False,
+        transparency=0, disposal=2, optimize=False,
     )
     kb = gif.stat().st_size / 1024
     assert kb <= 128, f"{gif.name} is {kb:.0f} KB — over Slack's 128 KB cap"
-    print(f"{NAME}: {F} frames @ {DUR}ms, gif={kb:.0f} KB")
+    print(f"{NAME}: {F} frames @ {DUR}ms, {len(colors)} colours, gif={kb:.0f} KB")
 
 
 if __name__ == "__main__":
