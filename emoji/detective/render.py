@@ -20,20 +20,21 @@ OUT = Path(__file__).resolve().parent
 NAME = "clawd_detective"
 
 N = 128                 # canvas (Slack emoji size)
-F = 24                  # frames in the loop
-DUR = 90                # ms per frame (multiple of 10: GIFs store centiseconds)
+F = 30                  # frames in the loop
+DUR = 70                # ms per frame (multiple of 10: GIFs store centiseconds)
 SCALE = 9               # 108x72 sprite: as wide as the sway allows
-STILL = 12              # mid-peer frame for the gallery still
+STILL = 15              # mid-peer frame for the gallery still
 
-RAISE = (3, 7)          # frames over which the glass comes up
-LOWER = (18, 22)        # ... and goes back down; frame 0 == frame F at rest
+RAISE = (3, 9)          # frames over which the glass comes up
+LOWER = (22, 28)        # ... and goes back down; frame 0 == frame F at rest
 SWAY = 4                # px he leans either way while peering
 SCAN = 2                # px the lens drifts across his eye while he leans
-ZOOM = 1.7              # lens magnification at the start of the peer
-ZOOM_PULSE = 0.3        # extra magnification at the middle of it
+ZOOM = 3.0              # lens magnification at the start of the peer
+ZOOM_PULSE = 0.5        # extra magnification at the middle of it
 
-LENS_R = 16             # outer radius of the rim
-RIM = 3                 # rim thickness
+LENS_R = 21             # outer radius of the rim
+RIM = 4                 # rim thickness
+TAIL = 7                # px of handle poking out past his hand
 REST_ANG = 120          # degrees: lens hanging down in front of him
 SQUINT_AT = 0.55        # how far up the glass is before the other eye squints
 
@@ -157,7 +158,8 @@ def compose(f):
 
     g = base.copy()
     ey, ex = ly - LENS_R * math.sin(ang), lx - LENS_R * math.cos(ang)
-    thick_line(g, ey, ex, hy, hx, 2, HANDLE)
+    ty, tx = hy - TAIL * math.sin(ang), hx - TAIL * math.cos(ang)
+    thick_line(g, ey, ex, ty, tx, 2, HANDLE)
 
     yy, xx = np.mgrid[:N, :N]
     d = np.hypot(yy - ly, xx - lx)
@@ -166,6 +168,14 @@ def compose(f):
     sx = np.clip(np.round(lx + (xx - lx) / zoom).astype(int), 0, N - 1)
     seen = base[sy, sx]
     g[inner] = np.where(seen[inner] == 0, GLASS, seen[inner])
+
+    ey0, ex0 = Y0 + LOOK_EYE[0] * SCALE, x0 + LOOK_EYE[1] * SCALE
+    my, mx = ly + (ey0 - ly) * zoom, lx + (ex0 - lx) * zoom
+    cl = max(3, round(zoom * 2))
+    cy_, cx_ = round(my + SCALE * zoom * 0.18), round(mx + SCALE * zoom * 0.18)
+    catch = np.zeros_like(inner)
+    catch[cy_:cy_ + cl, cx_:cx_ + cl] = True
+    g[catch & inner & (g == EYE)] = OUTLINE
 
     rim = (d >= LENS_R - RIM) & (d <= LENS_R)
     g[rim] = RIM_C
