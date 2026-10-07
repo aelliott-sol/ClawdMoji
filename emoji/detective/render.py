@@ -34,11 +34,11 @@ RAISE = (3, 9)          # frames over which the glass comes up
 LOWER = (22, 28)        # ... and back down; frame 0 == frame F at rest
 BOB = {1, 2, F - 2, F - 1}  # rest frames where he settles one cell
 SWAY = 2.5              # cells his upper body leans either way while peering
-SCAN = 0.75             # cells the lens drifts across his eye
-ZOOM = 2.0              # lens magnification at the start of the peer
+SCAN = 1.5              # cells the lens drifts across his eye
+ZOOM = 2.2              # lens magnification at the start of the peer
 ZOOM_PULSE = 0.4        # extra magnification at the middle of it
-LENS_R = (7.0, 7.0)     # lens radius at rest, raised
-REST_HAND, UP_HAND = (55.0, 41.0), (50.5, 42.0)
+LENS_R = (7.0, 9.0)     # lens radius at rest, raised
+REST_HAND, UP_HAND = (55.0, 41.0), (52.0, 44.5)
 REST_ANG, UP_ANG = 135, 225     # degrees: lens down in front of him, up over his eye
 SQUINT_AT = 0.55        # how far up the glass is before the other eye squints
 LEG_ROW = 50            # grid rows from here down stay planted while he leans
@@ -96,10 +96,11 @@ def draw_clawd(a, oy, squint):
     for lx in (17, 23, 38, 44):
         rect(a, lx, 50 + oy, lx + 2, 55 + oy, CLAWD)
     if squint:
-        rect(a, 19, 34 + oy, 24, 34 + oy, EYE)
+        rect(a, 19, 35 + oy, 24, 36 + oy, EYE)
     else:
-        rect(a, 20, 32 + oy, 22, 35 + oy, EYE)
-    rect(a, 41, 32 + oy, 43, 35 + oy, EYE)
+        rect(a, 20, 32 + oy, 22, 37 + oy, EYE)
+    rect(a, 41, 32 + oy, 43, 37 + oy, EYE)
+    rect(a, 42, 33 + oy, 42, 33 + oy, GLINT)
     draw_hat(a, oy - 4)
 
 
